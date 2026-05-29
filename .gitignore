@@ -11,8 +11,11 @@ dist/
 venv/
 env/
 
-# Secrets / local config
+# Secrets
 .env
+
+# Runtime artifacts
+catalog.json
 
 # Tooling
 .pytest_cache/
