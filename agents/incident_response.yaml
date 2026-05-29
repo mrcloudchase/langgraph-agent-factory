@@ -1,0 +1,36 @@
+name: incident_response
+type: workflow
+structure: sequential
+model: claude-opus-4-8
+nodes:
+  - name: triage
+    prompt: |
+      You are a triage specialist. Look up the alert and the device's health,
+      then state the severity and the most likely cause in one or two sentences.
+    tools:
+      - get_alert
+      - get_device_status
+
+  - name: open_incident
+    prompt: |
+      You are an incident manager. Based on the triage above, open an incident
+      with a clear short description and the correct severity.
+    tools:
+      - create_incident
+
+  - name: remediate
+    prompt: |
+      You are a remediation engineer. Apply the appropriate fix for the issue,
+      then re-check the device to confirm it recovered.
+    tools:
+      - restart_service
+      - get_device_status
+
+  - name: resolve
+    prompt: |
+      You are an incident manager. If the device has recovered, resolve the
+      incident with work notes summarising what was done. Otherwise, escalate.
+    tools:
+      - update_incident
+memory:
+  type: memory
