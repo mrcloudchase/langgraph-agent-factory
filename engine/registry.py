@@ -8,8 +8,9 @@ from langchain_core.tools import tool as _lc_tool
 class ToolRegistry:
     """Holds the tools available to agents.
 
-    Use .register() for pre-decorated @tool functions and .tool as a
-    decorator for plain functions you want to turn into tools inline.
+    tools.register(web_search, web_fetch)   # pre-decorated @tool functions
+    @tools.tool                              # decorator for inline functions
+    def my_tool(x: str) -> str: ...
     """
 
     def __init__(self) -> None:
@@ -21,16 +22,14 @@ class ToolRegistry:
             self._tools[fn.name] = fn
 
     def tool(self, fn: Any) -> Any:
-        """Decorator: wrap fn as a LangChain tool and register it."""
+        """Decorator — wraps fn as a LangChain tool and registers it."""
         wrapped = _lc_tool(fn)
         self._tools[wrapped.name] = wrapped
         return wrapped
 
     def get(self, name: str) -> Any:
         if name not in self._tools:
-            raise KeyError(
-                f"Tool '{name}' not registered. Available: {self.names}"
-            )
+            raise KeyError(f"Tool '{name}' not registered. Available: {self.names}")
         return self._tools[name]
 
     @property

@@ -1,6 +1,4 @@
-"""Built-in tools that ship with the factory.
-
-Import any of these and pass them to ToolRegistry.register():
+"""Built-in tools — import and register any you need.
 
     from engine.tools import web_search, web_fetch, run_python
     tools.register(web_search, web_fetch, run_python)
@@ -39,9 +37,7 @@ def web_fetch(url: str) -> str:
     Strips navigation, scripts, and boilerplate. Returns up to 4000 chars."""
     try:
         response = httpx.get(
-            url,
-            timeout=15,
-            follow_redirects=True,
+            url, timeout=15, follow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0"},
         )
         soup = BeautifulSoup(response.text, "html.parser")
@@ -65,4 +61,3 @@ def run_python(code: str) -> str:
         return f"Error: {exc}"
     finally:
         sys.stdout = sys.__stdout__
-
