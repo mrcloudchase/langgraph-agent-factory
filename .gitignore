@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets
+.env
+
+# Runtime artifacts
+catalog.json
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
