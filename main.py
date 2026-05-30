@@ -35,12 +35,6 @@ def main() -> None:
     # ── Tool registry ─────────────────────────────────────────────────────────
     tools = ToolRegistry()
     tools.register(web_search, web_fetch, run_python)
-
-    @tools.tool
-    def word_count(text: str) -> str:
-        """Return the word count of a text string."""
-        return f"{len(text.split())} words"
-
     factory = AgentFactory(tools)
 
     # ── Define leaf agents (all react) ────────────────────────────────────────
@@ -153,8 +147,6 @@ def main() -> None:
     agent = factory.build("write-and-review")
     result = agent.invoke({
         "messages": [{"role": "user", "content": "Explain what a LangGraph StateGraph is in two sentences."}],
-        "accepted": False,
-        "iterations": 0,
     })
     print(result["messages"][-1].content)
 

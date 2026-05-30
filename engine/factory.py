@@ -109,7 +109,7 @@ class AgentFactory:
             agent = self._get_built(name)
 
             def make_node(ag: Any):
-                def node(state: State) -> dict:
+                def node(state) -> dict:
                     result = ag.invoke({"messages": state["messages"]})
                     return {"messages": [result["messages"][-1]]}
                 return node
@@ -146,7 +146,7 @@ class AgentFactory:
             for n in agent_names
         )
 
-        def router_node(state: State) -> dict:
+        def router_node(state) -> dict:
             msg = {
                 "role": "user",
                 "content": (
@@ -172,7 +172,7 @@ class AgentFactory:
             agent = self._get_built(name)
 
             def make_node(ag: Any):
-                def node(state: State) -> dict:
+                def node(state) -> dict:
                     result = ag.invoke({"messages": state["messages"]})
                     return {"messages": [result["messages"][-1]]}
                 return node
@@ -204,7 +204,7 @@ class AgentFactory:
         class State(TypedDict):
             messages: Annotated[list, add_messages]
 
-        def run_parallel(state: State) -> dict:
+        def run_parallel(state) -> dict:
             def run(item: tuple[str, Any]) -> str:
                 name, agent = item
                 result = agent.invoke({"messages": state["messages"]})
@@ -271,7 +271,7 @@ class AgentFactory:
             accepted:   bool
             iterations: int
 
-        def generate(state: State) -> dict:
+        def generate(state) -> dict:
             result = generator.invoke({"messages": state["messages"]})
             return {
                 "messages":   [result["messages"][-1]],
@@ -279,7 +279,7 @@ class AgentFactory:
                 "accepted":   False,
             }
 
-        def evaluate(state: State) -> dict:
+        def evaluate(state) -> dict:
             eval_input = state["messages"] + [{
                 "role": "user",
                 "content": (
