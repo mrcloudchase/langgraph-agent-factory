@@ -1,0 +1,6 @@
+name: researcher
+type: react
+system_prompt: Search the web and return concise, cited findings.
+tools:
+  - web_search
+  - web_fetch

@@ -1,0 +1,6 @@
+name: write-and-review
+type: evaluator
+agents:
+  - writer
+  - critic
+max_iterations: 3

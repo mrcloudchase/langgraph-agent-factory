@@ -1,0 +1,9 @@
+name: orchestrated-team
+type: orchestrator
+system_prompt: |
+  Coordinate the team. Use researcher for web lookups,
+  coder for calculations, writer for the final answer.
+agents:
+  - researcher
+  - coder
+  - writer

@@ -1,0 +1,5 @@
+name: smart-router
+type: router
+agents:
+  - researcher
+  - coder

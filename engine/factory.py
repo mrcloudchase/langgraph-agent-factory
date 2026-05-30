@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
+
+import yaml
+from pydantic import ValidationError
 
 from .builders import BUILDERS
 from .registry import ToolRegistry
@@ -8,12 +12,18 @@ from .specs import AgentSpec
 
 
 class AgentFactory:
-    """Builds any LangGraph agentic system from an AgentSpec.
+    """Builds any LangGraph agentic system from YAML agent definitions.
+
+    Typical usage:
 
         factory = AgentFactory(tools)
-        factory.register(spec)
-        agent = factory.build("my-agent")
+        factory.load("agents/")           # load all *.yaml files in a directory
+        agent = factory.build("researcher")
         result = agent.invoke({"messages": [{"role": "user", "content": "..."}]})
+
+    You can also register specs programmatically:
+
+        factory.register(AgentSpec(name="my-agent", type="react", ...))
     """
 
     def __init__(self, tools: ToolRegistry) -> None:
@@ -21,10 +31,32 @@ class AgentFactory:
         self._specs: dict[str, AgentSpec] = {}
         self._graphs: dict[str, Any] = {}
 
+    # ── Loading ───────────────────────────────────────────────────────────────
+
+    def load(self, path: str | Path) -> None:
+        """Load agent specs from a YAML file or every *.yaml file in a directory."""
+        p = Path(path)
+        if p.is_dir():
+            for f in sorted(p.glob("*.yaml")) + sorted(p.glob("*.yml")):  # type: ignore[operator]
+                self._load_file(f)
+        elif p.is_file():
+            self._load_file(p)
+        else:
+            raise FileNotFoundError(f"Path not found: {path}")
+
+    def _load_file(self, path: Path) -> None:
+        try:
+            data = yaml.safe_load(path.read_text())
+            self.register(AgentSpec(**data))
+        except ValidationError as exc:
+            raise ValueError(f"Invalid agent spec in '{path.name}':\n{exc}") from exc
+        except yaml.YAMLError as exc:
+            raise ValueError(f"Invalid YAML in '{path.name}': {exc}") from exc
+
     # ── Registration ──────────────────────────────────────────────────────────
 
     def register(self, spec: AgentSpec) -> None:
-        """Register an AgentSpec so it can be built by name."""
+        """Register an AgentSpec programmatically."""
         self._specs[spec.name] = spec
 
     def register_graph(self, name: str, graph: Any) -> None:
@@ -55,3 +87,4 @@ class AgentFactory:
 
     def get_tool(self, name: str) -> Any:
         return self._tools.get(name)
+

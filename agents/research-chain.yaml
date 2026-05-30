@@ -1,0 +1,5 @@
+name: research-chain
+type: chain
+agents:
+  - researcher
+  - summariser

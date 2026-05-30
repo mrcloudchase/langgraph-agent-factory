@@ -1,8 +1,8 @@
 # LangGraph Agent Factory
 
-A declarative agent factory that implements every agentic system pattern from Anthropic's [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) using LangGraph.
+A YAML-driven agent factory that implements every agentic system pattern from Anthropic's [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) using LangGraph.
 
-Define tools, describe agents with `AgentSpec`, and the factory assembles the correct LangGraph graph for you — no boilerplate required.
+Define agents in YAML. Register tools in Python. The factory handles the rest.
 
 ---
 
@@ -25,88 +25,124 @@ Define tools, describe agents with `AgentSpec`, and the factory assembles the co
 ```bash
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...
-python main.py          # runs one example of every pattern
+python main.py
 ```
 
 ---
 
 ## Usage
 
-### 1. Set up tools
+### 1. Register tools
+
+Tools are Python functions — they have to be, since they execute code. Register built-ins or write your own:
 
 ```python
-from engine import AgentFactory, AgentSpec, ToolRegistry
+from engine import AgentFactory, ToolRegistry
 from engine.tools import web_search, web_fetch, run_python
 
 tools = ToolRegistry()
 tools.register(web_search, web_fetch, run_python)
 
-# Register a custom tool with the .tool decorator
 @tools.tool
 def word_count(text: str) -> str:
     """Count the words in a text string."""
     return f"{len(text.split())} words"
 ```
 
-### 2. Define and build agents
+### 2. Define agents in YAML
+
+Create a file in `agents/` for each agent. The filename is up to you — the `name` field is what the factory uses.
+
+```yaml
+# agents/researcher.yaml
+name: researcher
+type: react
+system_prompt: Search the web and return concise, cited findings.
+tools:
+  - web_search
+  - web_fetch
+```
+
+```yaml
+# agents/research-chain.yaml
+name: research-chain
+type: chain
+agents:
+  - researcher
+  - summariser
+```
+
+### 3. Load and run
 
 ```python
 factory = AgentFactory(tools)
-
-factory.register(AgentSpec(
-    name="researcher",
-    type="react",
-    system_prompt="Search the web and return concise, cited findings.",
-    tools=["web_search", "web_fetch"],
-))
+factory.load("agents/")          # loads every *.yaml in the directory
 
 agent = factory.build("researcher")
 result = agent.invoke({"messages": [{"role": "user", "content": "What is LangGraph?"}]})
 print(result["messages"][-1].content)
 ```
 
-Every agent type is invoked the same way — `agent.invoke({"messages": [...]})`.
+Every agent type is invoked identically: `agent.invoke({"messages": [...]})`.
+
+---
+
+## YAML schema
+
+All fields except `name` are optional.
+
+| Field | Type | Default | Notes |
+|-------|------|---------|-------|
+| `name` | string | **required** | Used by `factory.build()` |
+| `type` | string | `react` | See patterns table above |
+| `model` | string | `claude-opus-4-8` | Any Anthropic model ID |
+| `system_prompt` | string | `""` | Instructions for the agent |
+| `tools` | list | `[]` | Tool names registered in `ToolRegistry` |
+| `agents` | list | `[]` | Subagent names (by `name` field) |
+| `max_iterations` | int | `5` | Loop cap for `evaluator` |
+| `checkpointer` | bool | `false` | Enable in-memory conversation history (`react` only) |
 
 ---
 
 ## Agent types
 
-### `react` — ReAct agent
+### `react`
 
-A single agent that loops: reason about the task, call a tool, observe the result, repeat until done.
+Single agent that loops: reason → call tool → observe → repeat.
 
-```python
-factory.register(AgentSpec(
-    name="researcher",
-    type="react",
-    system_prompt="Search the web and return concise, cited findings.",
-    tools=["web_search", "web_fetch"],
-))
+```yaml
+name: researcher
+type: react
+system_prompt: Search the web and return concise, cited findings.
+tools:
+  - web_search
+  - web_fetch
 ```
 
 ---
 
 ### `chain` — Prompt chaining
 
-Agents run in sequence. The last message from each step becomes the input to the next.
+Agents run in order. Each step receives the previous step's output.
 
 ```
 researcher → summariser → formatter
 ```
 
-```python
-factory.register(AgentSpec(
-    name="research-pipeline",
-    type="chain",
-    agents=["researcher", "summariser"],
-))
+```yaml
+name: research-pipeline
+type: chain
+agents:
+  - researcher
+  - summariser
+  - formatter
 ```
 
 ---
 
 ### `router` — Routing
 
-An LLM classifier reads the input and routes it to exactly one specialist agent. The classifier makes one decision — it does not stay in the loop.
+LLM reads the input, picks one agent, hands off, done. The classifier uses each agent's `system_prompt` as its description.
 
 ```
 input → [classify] → researcher
@@ -114,21 +150,20 @@ input → [classify] → researcher
                    ↘ writer
 ```
 
-```python
-factory.register(AgentSpec(
-    name="smart-router",
-    type="router",
-    agents=["researcher", "coder", "writer"],
-))
+```yaml
+name: smart-router
+type: router
+agents:
+  - researcher
+  - coder
+  - writer
 ```
-
-The classifier uses each agent's `system_prompt` as its description when deciding which to pick.
 
 ---
 
 ### `parallel` — Parallelization
 
-All agents receive the same input and run concurrently. Their outputs are collected and merged into a single response.
+All agents receive the same input concurrently. Outputs are merged into one response.
 
 ```
          ┌→ analyst-a ─┐
@@ -136,77 +171,77 @@ input ───┤              ├→ merged output
          └→ analyst-b ─┘
 ```
 
-```python
-factory.register(AgentSpec(
-    name="dual-analysis",
-    type="parallel",
-    agents=["analyst-a", "analyst-b"],
-))
+```yaml
+name: dual-analysis
+type: parallel
+agents:
+  - analyst-a
+  - analyst-b
 ```
 
 ---
 
 ### `orchestrator` — Orchestrator-subagents
 
-An orchestrator LLM dynamically decides which agent to call at each step and synthesises the final result. Unlike routing, it stays in control across multiple turns.
+An orchestrator LLM dynamically decides what to do at each step — unlike `router`, it stays in the loop across multiple turns and synthesises the final result.
 
-Requires: `pip install langgraph-supervisor`
+> Requires `pip install langgraph-supervisor`
 
-```python
-factory.register(AgentSpec(
-    name="research-team",
-    type="orchestrator",
-    system_prompt=(
-        "Coordinate the team. Use researcher for web lookups, "
-        "coder for calculations, writer for the final answer."
-    ),
-    agents=["researcher", "coder", "writer"],
-))
+```yaml
+name: research-team
+type: orchestrator
+system_prompt: |
+  Coordinate the team. Use researcher for web lookups,
+  coder for calculations, writer for the final answer.
+agents:
+  - researcher
+  - coder
+  - writer
 ```
 
 ---
 
 ### `evaluator` — Evaluator-optimizer
 
-`agents[0]` generates output. `agents[1]` reviews it and replies `ACCEPTED` or `REJECTED: <feedback>`. On rejection the feedback is added to the conversation and the generator tries again. Exits when accepted or `max_iterations` is reached.
+`agents[0]` generates output. `agents[1]` reviews it, replying `ACCEPTED` or `REJECTED: <feedback>`. On rejection the feedback is added to the conversation and the generator retries. Exits on acceptance or `max_iterations`.
 
 ```
 START → generate → evaluate → ACCEPTED? → END
             ↑                ↘ feedback ↗
 ```
 
-```python
-factory.register(AgentSpec(
-    name="write-and-review",
-    type="evaluator",
-    agents=["writer", "critic"],   # [0] generator, [1] evaluator
-    max_iterations=3,
-))
+```yaml
+name: write-and-review
+type: evaluator
+agents:
+  - writer    # [0] generator
+  - critic    # [1] evaluator
+max_iterations: 3
 ```
 
-The evaluator agent's `system_prompt` should instruct it to reply with `ACCEPTED` or `REJECTED: <specific feedback>`.
+The evaluator's `system_prompt` should instruct it to reply `ACCEPTED` or `REJECTED: <specific feedback>`.
 
 ---
 
-### `swarm` — Swarm
+### `swarm`
 
-Each agent in the pool can hand off to any other agent. The factory automatically creates handoff tools between all participants. Control starts with `agents[0]`.
+Each agent can hand off to any other. The factory wires the handoff tools automatically. Control starts with `agents[0]`.
 
-Requires: `pip install langgraph-swarm`
+> Requires `pip install langgraph-swarm`
 
-```python
-factory.register(AgentSpec(
-    name="research-swarm",
-    type="swarm",
-    agents=["researcher", "summariser"],
-))
+```yaml
+name: research-swarm
+type: swarm
+agents:
+  - researcher
+  - summariser
 ```
 
 ---
 
 ## Custom workflows
 
-For patterns not covered above, build a LangGraph `StateGraph` directly and register it with the factory by name:
+Register any hand-built `StateGraph` directly:
 
 ```python
 from langgraph.graph import StateGraph, START, END
@@ -216,11 +251,8 @@ from langgraph.graph.message import add_messages
 class State(TypedDict):
     messages: Annotated[list, add_messages]
 
-def my_node(state):
-    return {"messages": [{"role": "assistant", "content": "done"}]}
-
 graph = StateGraph(State)
-graph.add_node("step", my_node)
+graph.add_node("step", lambda s: {"messages": [{"role": "assistant", "content": "done"}]})
 graph.add_edge(START, "step")
 graph.add_edge("step", END)
 
@@ -232,42 +264,28 @@ agent = factory.build("my-workflow")
 
 ## Built-in tools
 
-Three general-purpose tools ship with the factory and cover most use cases without domain-specific integrations:
-
 | Tool | Description |
 |------|-------------|
-| `web_search` | Search the web via DuckDuckGo, returns titles, URLs, and snippets |
-| `web_fetch` | Fetch a URL and extract its readable text (strips nav, scripts, boilerplate) |
-| `run_python` | Execute Python code and return its stdout output |
+| `web_search` | Search the web via DuckDuckGo — returns titles, URLs, snippets |
+| `web_fetch` | Fetch a URL and extract readable text (strips nav, scripts, boilerplate) |
+| `run_python` | Execute Python code and return its stdout |
 
 ```python
 from engine.tools import web_search, web_fetch, run_python
-
-tools = ToolRegistry()
 tools.register(web_search, web_fetch, run_python)
 ```
 
 ---
 
-## `AgentSpec` reference
-
-| Field | Type | Default | Used by |
-|-------|------|---------|---------|
-| `name` | `str` | required | all |
-| `type` | `str` | `"react"` | all |
-| `model` | `str` | `"claude-opus-4-8"` | all |
-| `system_prompt` | `str` | `""` | all |
-| `tools` | `list[str]` | `[]` | `react`, `swarm` |
-| `agents` | `list[str]` | `[]` | `chain`, `router`, `parallel`, `orchestrator`, `evaluator`, `swarm` |
-| `max_iterations` | `int` | `5` | `evaluator` |
-| `checkpointer` | `bool` | `False` | `react` (enables memory) |
-
----
-
-## Requirements
+## Project layout
 
 ```
-ANTHROPIC_API_KEY   required for all patterns
-langgraph-supervisor   required for orchestrator
-langgraph-swarm        required for swarm
+agents/          YAML agent definitions — add a file, get an agent
+engine/
+  factory.py     AgentFactory — load(), build(), register_graph()
+  registry.py    ToolRegistry — register(), .tool decorator
+  specs.py       AgentSpec — Pydantic model (YAML maps directly to this)
+  tools.py       Built-in tools
+  builders/      One builder per pattern, shared helpers in _base.py
+main.py          Demo — tools + factory.load() + invocations, nothing else
 ```

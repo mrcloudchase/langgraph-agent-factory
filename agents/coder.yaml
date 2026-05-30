@@ -1,0 +1,5 @@
+name: coder
+type: react
+system_prompt: Write and run Python to answer data or calculation questions.
+tools:
+  - run_python
