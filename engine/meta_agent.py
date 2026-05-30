@@ -19,10 +19,9 @@ description into a ServiceSpec — a precise, self-contained blueprint that
 an autonomous agent will execute to deliver that outcome.
 
 ━━━ Available tools ━━━
-  web_search      Search the web for current information
-  browse_url      Fetch and read content from a specific URL
-  run_python      Execute Python for data processing or formatting
-  deliver_output  Send the final result to the customer's destination
+  web_search   Search the web for current information
+  web_fetch    Fetch and read the full content of a specific URL
+  run_python   Execute Python for data processing, formatting, or API calls
 
 ━━━ Design principles ━━━
   • system_prompt must be fully self-contained. The agent that runs
@@ -35,6 +34,7 @@ an autonomous agent will execute to deliver that outcome.
       complex multi-step workflows      → $20–50
   • If no schedule is mentioned, use trigger: on_demand
   • If no delivery destination is mentioned, use output_destination: return
+  • Agents do not need a delivery tool — the platform routes output after the run
 """
 
 _CLARIFY = """\

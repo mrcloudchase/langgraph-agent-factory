@@ -1,12 +1,12 @@
-"""General-purpose tools that service agents can use.
+"""The three tools every service agent has access to.
 
-These tools are domain-agnostic — they give agents the ability to reach
-the open web, process data, and deliver output to any destination.
-That combination covers the vast majority of possible services without
-needing domain-specific integrations.
+web_search   — find things across the open web
+web_fetch    — read a specific URL in full
+run_python   — process, format, calculate, or call any API via code
 
-In production, deliver_output would call real email/Slack/webhook APIs.
-Here it prints to stdout so the demo is fully visible.
+These primitives cover the vast majority of possible services without
+any domain-specific integrations. Delivery is a platform concern handled
+by the Runtime, not a tool concern handled by the agent.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def web_search(query: str) -> str:
 
 
 @tool
-def browse_url(url: str) -> str:
+def web_fetch(url: str) -> str:
     """Fetch and extract readable text from a URL.
     Strips navigation, scripts, and boilerplate. Returns up to 4000 chars."""
     try:
@@ -58,7 +58,7 @@ def browse_url(url: str) -> str:
 @tool
 def run_python(code: str) -> str:
     """Execute Python code and return its printed output.
-    Use for data processing, number crunching, or formatting results."""
+    Use for data processing, calculations, formatting, or calling external APIs."""
     buf = StringIO()
     sys.stdout = buf
     try:
@@ -70,25 +70,6 @@ def run_python(code: str) -> str:
         sys.stdout = sys.__stdout__
 
 
-@tool
-def deliver_output(destination: str, content: str) -> str:
-    """Deliver the final output to the customer's chosen destination.
-
-    destination formats:
-      email:address@domain.com
-      slack:#channel-name
-      webhook:https://...
-    """
-    width = 64
-    bar = "─" * width
-    print(f"\n{bar}")
-    print(f"  Delivered → {destination}")
-    print(bar)
-    print(content)
-    print(f"{bar}\n")
-    return f"Delivered to {destination}"
-
-
 TOOL_REGISTRY: dict[str, object] = {
-    t.name: t for t in [web_search, browse_url, run_python, deliver_output]
+    t.name: t for t in [web_search, web_fetch, run_python]
 }

@@ -3,6 +3,9 @@
 The runtime is intentionally thin. It takes a ServiceSpec,
 assembles the right agent, runs it, handles delivery, and returns
 a ServiceRun. It knows nothing about how the spec was created.
+
+Delivery is a platform concern owned here, not a tool the agent calls.
+The agent produces output; the runtime routes it to the destination.
 """
 
 from __future__ import annotations
@@ -33,15 +36,7 @@ class Runtime:
         })
         output = result["messages"][-1].content
 
-        # If the spec has a real delivery destination, push the output there.
-        if spec.output_destination not in ("return", ""):
-            deliver = TOOL_REGISTRY.get("deliver_output")
-            if deliver:
-                deliver.invoke({
-                    "destination": spec.output_destination,
-                    "content": output,
-                })
-
+        self._deliver(spec.output_destination, output)
         spec.run_count += 1
 
         return ServiceRun(
@@ -51,3 +46,25 @@ class Runtime:
             output=output,
             cost=spec.price_per_run,
         )
+
+    @staticmethod
+    def _deliver(destination: str, content: str) -> None:
+        """Route output to the customer's chosen destination.
+
+        In production each branch calls a real integration.
+        In the MVP the output is already printed by main.py,
+        so non-return destinations just note where they would go.
+        """
+        if destination in ("return", ""):
+            return
+        if destination.startswith("email:"):
+            # production: send via SES / SendGrid / SMTP
+            print(f"\n  → Email {destination[6:]}")
+        elif destination.startswith("slack:"):
+            # production: post via Slack Web API
+            print(f"\n  → Slack {destination[6:]}")
+        elif destination.startswith("webhook:"):
+            # production: HTTP POST to destination[8:]
+            print(f"\n  → Webhook {destination[8:]}")
+        else:
+            print(f"\n  → {destination}")
