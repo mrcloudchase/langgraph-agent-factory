@@ -1,0 +1,10 @@
+name: parallel-perspectives
+type: parallel
+steps:
+  - name: technical
+    type: llm
+    system_prompt: Analyse the topic from a technical and engineering perspective.
+
+  - name: business
+    type: llm
+    system_prompt: Analyse the topic from a business, market, and strategic perspective.

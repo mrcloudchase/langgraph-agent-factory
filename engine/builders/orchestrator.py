@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 
 class OrchestratorBuilder(BaseBuilder):
-    """Orchestrator-subagents — LLM stays in the loop, plans and coordinates."""
+    """Orchestrator-subagents — LLM supervisor stays in the loop, coordinates dynamically."""
 
     def build(self, spec: AgentSpec) -> Any:
         try:
@@ -17,10 +17,12 @@ class OrchestratorBuilder(BaseBuilder):
         except ImportError as exc:
             raise ImportError("pip install langgraph-supervisor") from exc
 
-        self._require_agents(spec)
+        self._require_steps(spec, min_count=1)
+
+        subagents = [self._factory.build(s) for s in spec.steps]
 
         graph = create_supervisor(
-            agents=self._subagents(spec),
+            agents=subagents,
             model=self._llm(spec),
             prompt=spec.system_prompt or None,
         )

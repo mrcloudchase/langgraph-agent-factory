@@ -1,6 +1,19 @@
 name: smart-router
 type: router
-agents:
-  - researcher
-  - coder
-  - writer
+steps:
+  - name: researcher
+    type: react
+    system_prompt: Answer factual and web research questions. Search for current information.
+    tools:
+      - web_search
+      - web_fetch
+
+  - name: analyst
+    type: react
+    system_prompt: Answer calculation, data processing, and coding questions by running Python.
+    tools:
+      - run_python
+
+  - name: writer
+    type: llm
+    system_prompt: Answer writing, editing, summarisation, and explanation tasks.

@@ -8,27 +8,21 @@ from pydantic import BaseModel, Field
 class AgentSpec(BaseModel):
     name: str
     type: Literal[
-        "react",        # ReAct agent — think → tool call → observe → repeat
-        "chain",        # Prompt chaining — A → B → C, output fed forward
-        "router",       # Routing — classify once, dispatch to one specialist
-        "parallel",     # Parallelization — all agents concurrently, outputs merged
-        "orchestrator", # Orchestrator-subagents — LLM dynamically plans & coordinates
-        "evaluator",    # Evaluator-optimizer — generate → critique loop
-        "swarm",        # Swarm — agents hand off to each other freely
+        "llm",          # single LLM call — one invocation, returns, done
+        "react",        # ReAct agent — LLM controls a tool-call loop
+        "chain",        # workflow: A → B → C, output fed forward
+        "router",       # workflow: classify once, dispatch to one step
+        "parallel",     # workflow: all steps run concurrently, outputs merged
+        "orchestrator", # workflow: LLM supervisor coordinates steps dynamically
+        "evaluator",    # workflow: generate → critique loop until accepted
     ] = "react"
 
     model: str = "claude-opus-4-8"
     system_prompt: str = ""
-    tools: list[str] = Field(default_factory=list)
+    tools: list[str] = Field(default_factory=list)          # for llm / react
+    steps: list[AgentSpec] = Field(default_factory=list)    # for workflow types
+    max_iterations: int = Field(default=5, ge=1)            # evaluator loop cap
+    checkpointer: bool = False                              # react only
 
-    # Subagent names — semantics vary by type:
-    #   chain        ordered pipeline [first, ..., last]
-    #   router       candidates the classifier picks from
-    #   parallel     all run concurrently
-    #   orchestrator pool the orchestrator draws from
-    #   evaluator    [generator, evaluator]
-    #   swarm        all participants
-    agents: list[str] = Field(default_factory=list)
 
-    max_iterations: int = Field(default=5, ge=1)  # evaluator loop cap
-    checkpointer: bool = False                     # enable memory on react agents
+AgentSpec.model_rebuild()

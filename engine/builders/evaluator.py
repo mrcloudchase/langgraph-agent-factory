@@ -13,28 +13,26 @@ if TYPE_CHECKING:
 
 
 class EvaluatorBuilder(BaseBuilder):
-    """Evaluator-optimizer — generator produces output, evaluator critiques, loop."""
+    """Evaluator-optimizer — generator produces output, evaluator critiques, loop repeats."""
 
     def build(self, spec: AgentSpec) -> Any:
-        self._require_agents(
-            spec, min_count=2, note="agents[0]=generator, agents[1]=evaluator"
-        )
+        self._require_steps(spec, min_count=2)
 
-        generator = self._factory.build(spec.agents[0])
-        evaluator = self._factory.build(spec.agents[1])
-        max_iter  = spec.max_iterations
+        generator = self._factory.build(spec.steps[0])
+        evaluator = self._factory.build(spec.steps[1])
+        max_iter = spec.max_iterations
 
         class State(TypedDict):
-            messages:   Annotated[list, add_messages]
-            accepted:   bool
+            messages: Annotated[list, add_messages]
+            accepted: bool
             iterations: int
 
         def generate(state):
             result = generator.invoke({"messages": state["messages"]})
             return {
-                "messages":   [result["messages"][-1]],
+                "messages": [result["messages"][-1]],
                 "iterations": state.get("iterations", 0) + 1,
-                "accepted":   False,
+                "accepted": False,
             }
 
         def evaluate(state):
@@ -64,6 +62,7 @@ class EvaluatorBuilder(BaseBuilder):
         graph.add_node("evaluate", evaluate)
         graph.add_edge(START, "generate")
         graph.add_edge("generate", "evaluate")
-        graph.add_conditional_edges("evaluate", should_continue, {END: END, "generate": "generate"})
+        graph.add_conditional_edges("evaluate", should_continue,
+                                    {END: END, "generate": "generate"})
 
         return self._compile(graph, spec.name)

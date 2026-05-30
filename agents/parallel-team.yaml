@@ -1,5 +1,0 @@
-name: parallel-team
-type: parallel
-agents:
-  - researcher
-  - coder

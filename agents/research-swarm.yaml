@@ -1,5 +1,0 @@
-name: research-swarm
-type: swarm
-agents:
-  - researcher
-  - summariser

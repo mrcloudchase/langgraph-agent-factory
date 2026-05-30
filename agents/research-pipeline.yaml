@@ -1,0 +1,17 @@
+name: research-pipeline
+type: chain
+steps:
+  - name: researcher
+    type: react
+    system_prompt: Search the web and gather comprehensive information on the topic. Cite URLs.
+    tools:
+      - web_search
+      - web_fetch
+
+  - name: summariser
+    type: llm
+    system_prompt: Condense the research into clear bullet points followed by a one-paragraph conclusion.
+
+  - name: writer
+    type: llm
+    system_prompt: Rewrite the summary as polished, publication-ready prose. Preserve all facts.

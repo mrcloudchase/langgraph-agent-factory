@@ -12,12 +12,12 @@ if TYPE_CHECKING:
 
 
 class ParallelBuilder(BaseBuilder):
-    """Parallelization — all agents run concurrently, outputs merged."""
+    """Parallelization — all steps run concurrently on the same input, outputs merged."""
 
     def build(self, spec: AgentSpec) -> Any:
-        self._require_agents(spec, min_count=2)
+        self._require_steps(spec, min_count=2)
 
-        subagents = {name: self._factory.build(name) for name in spec.agents}
+        step_agents = [(s.name, self._factory.build(s)) for s in spec.steps]
 
         def run_parallel(state):
             def run(item: tuple[str, Any]) -> str:
@@ -26,7 +26,7 @@ class ParallelBuilder(BaseBuilder):
                 return f"[{name}]\n{result['messages'][-1].content}"
 
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                parts = list(pool.map(run, subagents.items()))
+                parts = list(pool.map(run, step_agents))
 
             return {"messages": [{"role": "assistant", "content": "\n\n".join(parts)}]}
 

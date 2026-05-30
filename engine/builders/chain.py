@@ -11,18 +11,18 @@ if TYPE_CHECKING:
 
 
 class ChainBuilder(BaseBuilder):
-    """Prompt chaining — A → B → C, output of each step feeds the next."""
+    """Prompt chaining — steps run in sequence, each output fed to the next."""
 
     def build(self, spec: AgentSpec) -> Any:
-        self._require_agents(spec, min_count=2)
+        self._require_steps(spec, min_count=2)
 
         graph = StateGraph(MessagesState)
-        for name in spec.agents:
-            graph.add_node(name, self._agent_node(self._factory.build(name)))
+        for step in spec.steps:
+            graph.add_node(step.name, self._agent_node(self._factory.build(step)))
 
-        graph.add_edge(START, spec.agents[0])
-        for current, next_ in zip(spec.agents, spec.agents[1:]):
-            graph.add_edge(current, next_)
-        graph.add_edge(spec.agents[-1], END)
+        graph.add_edge(START, spec.steps[0].name)
+        for cur, nxt in zip(spec.steps, spec.steps[1:]):
+            graph.add_edge(cur.name, nxt.name)
+        graph.add_edge(spec.steps[-1].name, END)
 
         return self._compile(graph, spec.name)

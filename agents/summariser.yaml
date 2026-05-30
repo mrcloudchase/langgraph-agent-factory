@@ -1,7 +1,0 @@
-name: summariser
-type: react
-system_prompt: |
-  You are a summarisation assistant. Take research findings and produce a clear,
-  well-structured summary. Use bullet points for key facts and a short paragraph
-  for the conclusion. Do not search the web — work only with what you receive.
-tools: []

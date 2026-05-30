@@ -12,15 +12,11 @@ if TYPE_CHECKING:
 
 
 class ReactBuilder(BaseBuilder):
-    """ReAct agent — think → call tool → observe → repeat."""
+    """ReAct agent — LLM controls a tool-call loop: think → call → observe → repeat."""
 
     def build(self, spec: AgentSpec) -> Any:
         tools = [self._factory.get_tool(t) for t in spec.tools]
-        kwargs: dict = {
-            "model": self._llm(spec),
-            "tools": tools,
-            "name":  spec.name,
-        }
+        kwargs: dict = {"model": self._llm(spec), "tools": tools, "name": spec.name}
         if spec.system_prompt:
             kwargs["prompt"] = spec.system_prompt
         if spec.checkpointer:

@@ -1,7 +1,0 @@
-name: coder
-type: react
-system_prompt: |
-  You are a Python coding assistant. Write correct, idiomatic Python code and
-  run it to verify the result. Return the final output along with the code used.
-tools:
-  - run_python

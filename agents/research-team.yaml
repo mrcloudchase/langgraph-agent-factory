@@ -1,0 +1,22 @@
+name: research-team
+type: orchestrator
+system_prompt: |
+  You lead a research team. Coordinate your specialists to answer the question
+  thoroughly, then synthesise a single polished final response.
+steps:
+  - name: researcher
+    type: react
+    system_prompt: Search the web for information on any topic. Cite sources.
+    tools:
+      - web_search
+      - web_fetch
+
+  - name: analyst
+    type: react
+    system_prompt: Write and run Python to compute, analyse, or process data.
+    tools:
+      - run_python
+
+  - name: writer
+    type: llm
+    system_prompt: Write the final polished answer from the information gathered.

@@ -1,6 +1,15 @@
 name: write-and-review
 type: evaluator
 max_iterations: 3
-agents:
-  - writer
-  - critic
+steps:
+  - name: writer
+    type: llm
+    system_prompt: Write a clear, accurate, and concise response to the request.
+
+  - name: critic
+    type: llm
+    system_prompt: |
+      Review the response above. Reply with exactly one of:
+        ACCEPTED — if it is clear, accurate, and complete.
+        REJECTED: <specific feedback> — if it needs improvement.
+      Be precise. Point to the exact issue.

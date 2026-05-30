@@ -1,0 +1,7 @@
+name: web-researcher
+type: react
+system_prompt: |
+  Search the web to answer questions thoroughly. Always cite sources with URLs.
+tools:
+  - web_search
+  - web_fetch
