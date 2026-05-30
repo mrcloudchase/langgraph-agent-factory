@@ -14,7 +14,7 @@ import os
 import sys
 
 from engine import AgentFactory, ToolRegistry
-from engine.tools import run_python, web_fetch, web_search
+from engine.tools import BUILTIN_TOOLS
 
 
 def hr(label: str) -> None:
@@ -28,7 +28,7 @@ def main() -> None:
 
     # ── Register tools, load all agent definitions ────────────────────────────
     tools = ToolRegistry()
-    tools.register(web_search, web_fetch, run_python)
+    tools.register(*BUILTIN_TOOLS)
 
     factory = AgentFactory(tools)
     factory.load("agents/")

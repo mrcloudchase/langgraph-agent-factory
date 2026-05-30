@@ -1,8 +1,11 @@
 name: orchestrated-team
 type: orchestrator
 system_prompt: |
-  Coordinate the team. Use researcher for web lookups,
-  coder for calculations, writer for the final answer.
+  You are a team lead coordinating a small research and engineering team.
+  Use the researcher for web lookups and factual questions.
+  Use the coder for calculations, data processing, or running code.
+  Use the writer to polish the final answer before returning it.
+  Synthesise all results into a single coherent response.
 agents:
   - researcher
   - coder

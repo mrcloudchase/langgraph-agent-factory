@@ -2,7 +2,10 @@
 
 A YAML-driven agent factory that implements every agentic system pattern from Anthropic's [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) using LangGraph.
 
-Define agents in YAML. Register tools in Python. The factory handles the rest.
+**The factory provides**: seven agentic patterns as code and four built-in tools.  
+**You provide**: YAML files that define what your agents do, which pattern they use, and which tools they have.
+
+No Python required to author agents. Write YAML, get a running agentic system.
 
 ---
 
@@ -30,55 +33,140 @@ python main.py
 
 ---
 
-## Usage
+## How it works
 
-### 1. Register tools
+Everything is YAML. Write a file in `agents/`, run `factory.load("agents/")`, and call `factory.build("your-agent-name")`. That's it.
 
-Tools are Python functions — they have to be, since they execute code. Register built-ins or write your own:
+The factory wires the pattern (graph topology), the LLM, and the tools together from your spec. You focus on what the agent does — not how the graph is built.
+
+---
+
+## Built-in tools
+
+Four tools are available to any agent by name:
+
+| Tool | What it does |
+|------|-------------|
+| `web_search` | Search the web via DuckDuckGo — returns titles, URLs, snippets |
+| `web_fetch` | Fetch a URL and extract readable text (strips nav, scripts, boilerplate) |
+| `bash` | Execute a shell command and return its output |
+| `run_python` | Execute Python code via `python3 -c` in an isolated subprocess |
+
+Register all four at once:
 
 ```python
-from engine import AgentFactory, ToolRegistry
-from engine.tools import web_search, web_fetch, run_python
+from engine.tools import BUILTIN_TOOLS
+tools.register(*BUILTIN_TOOLS)
+```
 
-tools = ToolRegistry()
-tools.register(web_search, web_fetch, run_python)
+Or pick and choose:
 
+```python
+from engine.tools import web_search, run_python
+tools.register(web_search, run_python)
+```
+
+You can also register your own tools:
+
+```python
 @tools.tool
 def word_count(text: str) -> str:
     """Count the words in a text string."""
     return f"{len(text.split())} words"
 ```
 
-### 2. Define agents in YAML
+---
 
-Create a file in `agents/` for each agent. The filename is up to you — the `name` field is what the factory uses.
+## Authoring agents in YAML
+
+Create a file in `agents/` for each agent. The `name` field is what you pass to `factory.build()`.
+
+### Leaf agents (do the actual work)
 
 ```yaml
 # agents/researcher.yaml
 name: researcher
 type: react
-system_prompt: Search the web and return concise, cited findings.
+system_prompt: |
+  You are a research assistant. Search the web to answer questions thoroughly.
+  Always cite your sources with URLs.
 tools:
   - web_search
   - web_fetch
 ```
 
 ```yaml
-# agents/research-chain.yaml
+# agents/coder.yaml
+name: coder
+type: react
+system_prompt: |
+  You are a Python coding assistant. Write and run code to verify your answers.
+tools:
+  - run_python
+```
+
+### Composite agents (orchestrate leaf agents)
+
+Composite agents reference other agents by their `name` field. Load order doesn't matter — graphs are built on demand.
+
+```yaml
+# agents/research-chain.yaml  (prompt chaining)
 name: research-chain
 type: chain
 agents:
-  - researcher
-  - summariser
+  - researcher   # step 1: find information
+  - summariser   # step 2: distill findings
+  - writer       # step 3: polish the prose
 ```
 
-### 3. Load and run
+```yaml
+# agents/smart-router.yaml  (routing)
+name: smart-router
+type: router
+agents:
+  - researcher   # handles factual / web questions
+  - coder        # handles calculations and code
+  - writer       # handles writing and editing tasks
+```
+
+```yaml
+# agents/research-team.yaml  (orchestrator)
+name: research-team
+type: orchestrator
+system_prompt: |
+  Coordinate the team. Use researcher for web lookups,
+  coder for calculations, writer for the final answer.
+agents:
+  - researcher
+  - coder
+  - writer
+```
+
+```yaml
+# agents/write-and-review.yaml  (evaluator)
+name: write-and-review
+type: evaluator
+max_iterations: 3
+agents:
+  - writer    # [0] generator
+  - critic    # [1] evaluator — must reply ACCEPTED or REJECTED: <feedback>
+```
+
+---
+
+## Loading and running
 
 ```python
+from engine import AgentFactory, ToolRegistry
+from engine.tools import BUILTIN_TOOLS
+
+tools = ToolRegistry()
+tools.register(*BUILTIN_TOOLS)
+
 factory = AgentFactory(tools)
 factory.load("agents/")          # loads every *.yaml in the directory
 
-agent = factory.build("researcher")
+agent = factory.build("research-chain")
 result = agent.invoke({"messages": [{"role": "user", "content": "What is LangGraph?"}]})
 print(result["messages"][-1].content)
 ```
@@ -126,7 +214,7 @@ tools:
 Agents run in order. Each step receives the previous step's output.
 
 ```
-researcher → summariser → formatter
+researcher → summariser → writer
 ```
 
 ```yaml
@@ -135,7 +223,7 @@ type: chain
 agents:
   - researcher
   - summariser
-  - formatter
+  - writer
 ```
 
 ---
@@ -166,17 +254,17 @@ agents:
 All agents receive the same input concurrently. Outputs are merged into one response.
 
 ```
-         ┌→ analyst-a ─┐
-input ───┤              ├→ merged output
-         └→ analyst-b ─┘
+         ┌→ researcher ─┐
+input ───┤               ├→ merged output
+         └→ coder ───────┘
 ```
 
 ```yaml
-name: dual-analysis
+name: parallel-team
 type: parallel
 agents:
-  - analyst-a
-  - analyst-b
+  - researcher
+  - coder
 ```
 
 ---
@@ -262,21 +350,6 @@ agent = factory.build("my-workflow")
 
 ---
 
-## Built-in tools
-
-| Tool | Description |
-|------|-------------|
-| `web_search` | Search the web via DuckDuckGo — returns titles, URLs, snippets |
-| `web_fetch` | Fetch a URL and extract readable text (strips nav, scripts, boilerplate) |
-| `run_python` | Execute Python code and return its stdout |
-
-```python
-from engine.tools import web_search, web_fetch, run_python
-tools.register(web_search, web_fetch, run_python)
-```
-
----
-
 ## Project layout
 
 ```
@@ -285,7 +358,7 @@ engine/
   factory.py     AgentFactory — load(), build(), register_graph()
   registry.py    ToolRegistry — register(), .tool decorator
   specs.py       AgentSpec — Pydantic model (YAML maps directly to this)
-  tools.py       Built-in tools
+  tools.py       Built-in tools (web_search, web_fetch, bash, run_python)
   builders/      One builder per pattern, shared helpers in _base.py
-main.py          Demo — tools + factory.load() + invocations, nothing else
+main.py          Demo — tools + factory.load() + invocations
 ```

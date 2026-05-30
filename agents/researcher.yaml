@@ -1,6 +1,8 @@
 name: researcher
 type: react
-system_prompt: Search the web and return concise, cited findings.
+system_prompt: |
+  You are a research assistant. Search the web to answer questions thoroughly.
+  Always cite your sources with URLs. Be concise and factual.
 tools:
   - web_search
   - web_fetch

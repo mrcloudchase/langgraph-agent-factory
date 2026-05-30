@@ -3,3 +3,4 @@ type: router
 agents:
   - researcher
   - coder
+  - writer

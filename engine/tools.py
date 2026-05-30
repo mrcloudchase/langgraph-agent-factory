@@ -1,18 +1,29 @@
-"""Built-in tools — import and register any you need.
+"""Built-in tools provided by the factory.
 
-    from engine.tools import web_search, web_fetch, run_python
-    tools.register(web_search, web_fetch, run_python)
+All four are available to any agent by name:
+
+    tools:
+      - web_search
+      - web_fetch
+      - bash
+      - run_python
+
+Register them all at once:
+
+    from engine.tools import BUILTIN_TOOLS
+    tools.register(*BUILTIN_TOOLS)
 """
 
 from __future__ import annotations
 
-import sys
-from io import StringIO
+import subprocess
 
 import httpx
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 from langchain_core.tools import tool
+
+_TIMEOUT = 30
 
 
 @tool
@@ -36,11 +47,11 @@ def web_fetch(url: str) -> str:
     """Fetch and extract readable text from a URL.
     Strips navigation, scripts, and boilerplate. Returns up to 4000 chars."""
     try:
-        response = httpx.get(
-            url, timeout=15, follow_redirects=True,
+        resp = httpx.get(
+            url, timeout=_TIMEOUT, follow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0"},
         )
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
         return soup.get_text(separator="\n", strip=True)[:4000]
@@ -49,15 +60,44 @@ def web_fetch(url: str) -> str:
 
 
 @tool
-def run_python(code: str) -> str:
-    """Execute Python code and return its printed output.
-    Use for data processing, calculations, formatting, or calling external APIs."""
-    buf = StringIO()
-    sys.stdout = buf
+def bash(command: str) -> str:
+    """Execute a bash command and return its output.
+    Use for file operations, system commands, or running installed CLIs."""
     try:
-        exec(code, {})  # noqa: S102
-        return buf.getvalue() or "(no output)"
+        result = subprocess.run(
+            command, shell=True, capture_output=True,
+            text=True, timeout=_TIMEOUT,
+        )
+        out = result.stdout.strip()
+        err = result.stderr.strip()
+        if result.returncode != 0:
+            return (f"{out}\nError:\n{err}" if out else f"Error:\n{err}").strip()
+        return out or "(no output)"
+    except subprocess.TimeoutExpired:
+        return f"Error: command timed out after {_TIMEOUT}s"
     except Exception as exc:
         return f"Error: {exc}"
-    finally:
-        sys.stdout = sys.__stdout__
+
+
+@tool
+def run_python(code: str) -> str:
+    """Execute Python code via `python -c` and return its output.
+    Runs in an isolated subprocess — safe for data processing, calculations,
+    API calls, or anything that needs the full Python stdlib."""
+    try:
+        result = subprocess.run(
+            ["python3", "-c", code],
+            capture_output=True, text=True, timeout=_TIMEOUT,
+        )
+        out = result.stdout.strip()
+        err = result.stderr.strip()
+        if result.returncode != 0:
+            return (f"{out}\nError:\n{err}" if out else f"Error:\n{err}").strip()
+        return out or "(no output)"
+    except subprocess.TimeoutExpired:
+        return f"Error: code timed out after {_TIMEOUT}s"
+    except Exception as exc:
+        return f"Error: {exc}"
+
+
+BUILTIN_TOOLS = [web_search, web_fetch, bash, run_python]
