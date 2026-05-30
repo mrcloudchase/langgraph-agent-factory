@@ -1,17 +1,17 @@
-"""Agent Factory — demonstrates all five agentic system types.
+"""Agent Factory — one example per Anthropic pattern + swarm.
+
+Anthropic "Building Effective Agents" patterns implemented:
+  1. react         Single agent with tools
+  2. chain         Prompt chaining (A → B → C)
+  3. router        Routing (classify → one agent → done)
+  4. parallel      Parallelization (all agents concurrently, merged)
+  5. orchestrator  Orchestrator-subagents (requires langgraph-supervisor)
+  6. evaluator     Evaluator-optimizer (generate → critique → loop)
+  7. swarm         Agent handoff (requires langgraph-swarm)
 
     pip install -r requirements.txt
     export ANTHROPIC_API_KEY=sk-ant-...
     python main.py
-
-Patterns shown
---------------
-  react       Single agent with a tool set
-  sequential  Pipeline: researcher → summariser (output fed forward)
-  parallel    Two analysts run concurrently, outputs merged
-  supervisor  Router delegates to specialised subagents (requires langgraph-supervisor)
-  swarm       Agents hand off to each other (requires langgraph-swarm)
-  graph       Custom StateGraph registered directly
 """
 
 from __future__ import annotations
@@ -19,16 +19,12 @@ from __future__ import annotations
 import os
 import sys
 
-from langgraph.graph import END, START, StateGraph
-from typing_extensions import Annotated, TypedDict
-from langgraph.graph.message import add_messages
-
 from engine import AgentFactory, AgentSpec, ToolRegistry
 from engine.tools import run_python, web_fetch, web_search
 
 
-def section(label: str) -> None:
-    pad = (60 - len(label) - 2) // 2
+def hr(label: str) -> None:
+    pad = (62 - len(label) - 2) // 2
     print(f"\n{'─' * pad} {label} {'─' * pad}\n")
 
 
@@ -42,12 +38,12 @@ def main() -> None:
 
     @tools.tool
     def word_count(text: str) -> str:
-        """Count words in a block of text."""
+        """Return the word count of a text string."""
         return f"{len(text.split())} words"
 
-    # ── Agent specs ───────────────────────────────────────────────────────────
     factory = AgentFactory(tools)
 
+    # ── Define leaf agents (all react) ────────────────────────────────────────
     factory.register(AgentSpec(
         name="researcher",
         type="react",
@@ -58,125 +54,123 @@ def main() -> None:
     factory.register(AgentSpec(
         name="summariser",
         type="react",
-        system_prompt=(
-            "You receive research notes. Distill them into a 3-bullet executive summary. "
-            "Be direct and specific."
-        ),
-        tools=[],  # no tools needed — just reasoning
+        system_prompt="Distill research notes into a 3-bullet executive summary. Be direct.",
+        tools=[],
     ))
 
     factory.register(AgentSpec(
-        name="code-analyst",
+        name="critic",
         type="react",
-        system_prompt="Use Python to analyse data and produce clear numeric results.",
+        system_prompt=(
+            "You are a strict quality reviewer. "
+            "Reply ACCEPTED if the response is clear and accurate. "
+            "Otherwise reply REJECTED: <specific feedback>."
+        ),
+        tools=[],
+    ))
+
+    factory.register(AgentSpec(
+        name="coder",
+        type="react",
+        system_prompt="Write and run Python to answer data or calculation questions.",
         tools=["run_python"],
     ))
 
     factory.register(AgentSpec(
-        name="text-analyst",
+        name="writer",
         type="react",
-        system_prompt="Analyse text and report word count, tone, and key themes.",
-        tools=["word_count"],
+        system_prompt="Write clear, well-structured prose answers.",
+        tools=[],
     ))
 
-    # ── Pattern 1: react ─────────────────────────────────────────────────────
-    section("PATTERN 1 — react")
-    print("Single agent: researcher\n")
+    Q = "What is LangGraph and what are its main use cases?"
 
-    researcher = factory.build("researcher")
-    result = researcher.invoke({
-        "messages": [{"role": "user", "content": "What is LangGraph used for?"}]
-    })
+    # ── 1. react ──────────────────────────────────────────────────────────────
+    hr("1. react — single agent with tools")
+    agent = factory.build("researcher")
+    result = agent.invoke({"messages": [{"role": "user", "content": Q}]})
     print(result["messages"][-1].content)
 
-    # ── Pattern 2: sequential ────────────────────────────────────────────────
-    section("PATTERN 2 — sequential")
-    print("Pipeline: researcher → summariser\n")
-
+    # ── 2. chain (prompt chaining) ────────────────────────────────────────────
+    hr("2. chain — researcher → summariser")
     factory.register(AgentSpec(
-        name="research-pipeline",
-        type="sequential",
+        name="research-then-summarise",
+        type="chain",
         agents=["researcher", "summariser"],
     ))
-
-    pipeline = factory.build("research-pipeline")
-    result = pipeline.invoke({
-        "messages": [{"role": "user", "content": "What are the main use cases for LangGraph?"}]
-    })
+    agent = factory.build("research-then-summarise")
+    result = agent.invoke({"messages": [{"role": "user", "content": Q}]})
     print(result["messages"][-1].content)
 
-    # ── Pattern 3: parallel ──────────────────────────────────────────────────
-    section("PATTERN 3 — parallel")
-    print("Concurrent: code-analyst + text-analyst on the same input\n")
-
+    # ── 3. router (routing) ───────────────────────────────────────────────────
+    hr("3. router — classifier picks researcher or coder")
     factory.register(AgentSpec(
-        name="dual-analysis",
-        type="parallel",
-        agents=["code-analyst", "text-analyst"],
+        name="smart-router",
+        type="router",
+        agents=["researcher", "coder"],
     ))
-
-    parallel_team = factory.build("dual-analysis")
-    result = parallel_team.invoke({
-        "messages": [{"role": "user", "content": "Analyse this: 'The quick brown fox jumps over the lazy dog.'"}]
-    })
+    agent = factory.build("smart-router")
+    result = agent.invoke({"messages": [{"role": "user", "content": "Calculate the 20th Fibonacci number."}]})
     print(result["messages"][-1].content)
 
-    # ── Pattern 4: supervisor (optional) ─────────────────────────────────────
-    section("PATTERN 4 — supervisor")
+    # ── 4. parallel (parallelization) ─────────────────────────────────────────
+    hr("4. parallel — researcher + coder concurrently")
+    factory.register(AgentSpec(
+        name="parallel-team",
+        type="parallel",
+        agents=["researcher", "coder"],
+    ))
+    agent = factory.build("parallel-team")
+    result = agent.invoke({"messages": [{"role": "user", "content": Q}]})
+    print(result["messages"][-1].content)
+
+    # ── 5. orchestrator ───────────────────────────────────────────────────────
+    hr("5. orchestrator — plans across researcher + coder + writer")
     try:
         factory.register(AgentSpec(
-            name="research-team",
-            type="supervisor",
+            name="orchestrated-team",
+            type="orchestrator",
             system_prompt=(
-                "You manage a research team. "
-                "Route web research tasks to 'researcher' and data tasks to 'code-analyst'."
+                "You coordinate a research team. Use researcher for web lookups, "
+                "coder for calculations, and writer to produce the final answer."
             ),
-            agents=["researcher", "code-analyst"],
+            agents=["researcher", "coder", "writer"],
         ))
-        supervisor = factory.build("research-team")
-        result = supervisor.invoke({
-            "messages": [{"role": "user", "content": "Search for the latest LangGraph release notes."}]
-        })
+        agent = factory.build("orchestrated-team")
+        result = agent.invoke({"messages": [{"role": "user", "content": Q}]})
         print(result["messages"][-1].content)
     except ImportError as exc:
-        print(f"Skipped: {exc}")
+        print(f"Skipped — {exc}")
 
-    # ── Pattern 5: swarm (optional) ──────────────────────────────────────────
-    section("PATTERN 5 — swarm")
+    # ── 6. evaluator (evaluator-optimizer) ───────────────────────────────────
+    hr("6. evaluator — writer generates, critic reviews, loops until accepted")
+    factory.register(AgentSpec(
+        name="write-and-review",
+        type="evaluator",
+        agents=["writer", "critic"],
+        max_iterations=3,
+    ))
+    agent = factory.build("write-and-review")
+    result = agent.invoke({
+        "messages": [{"role": "user", "content": "Explain what a LangGraph StateGraph is in two sentences."}],
+        "accepted": False,
+        "iterations": 0,
+    })
+    print(result["messages"][-1].content)
+
+    # ── 7. swarm ──────────────────────────────────────────────────────────────
+    hr("7. swarm — researcher and summariser hand off freely")
     try:
         factory.register(AgentSpec(
             name="research-swarm",
             type="swarm",
             agents=["researcher", "summariser"],
         ))
-        swarm = factory.build("research-swarm")
-        result = swarm.invoke({
-            "messages": [{"role": "user", "content": "Research and summarise LangGraph's checkpointer feature."}]
-        })
+        agent = factory.build("research-swarm")
+        result = agent.invoke({"messages": [{"role": "user", "content": Q}]})
         print(result["messages"][-1].content)
     except ImportError as exc:
-        print(f"Skipped: {exc}")
-
-    # ── Pattern 6: custom graph via register_graph ────────────────────────────
-    section("PATTERN 6 — custom graph")
-    print("Manually built StateGraph registered with the factory\n")
-
-    class State(TypedDict):
-        messages: Annotated[list, add_messages]
-
-    def echo_node(state: State) -> State:
-        last = state["messages"][-1].content
-        return {"messages": [{"role": "assistant", "content": f"Echo: {last}"}]}
-
-    custom = StateGraph(State)
-    custom.add_node("echo", echo_node)
-    custom.add_edge(START, "echo")
-    custom.add_edge("echo", END)
-
-    factory.register_graph("echo-bot", custom.compile())
-    echo = factory.build("echo-bot")
-    result = echo.invoke({"messages": [{"role": "user", "content": "hello world"}]})
-    print(result["messages"][-1].content)
+        print(f"Skipped — {exc}")
 
 
 if __name__ == "__main__":
