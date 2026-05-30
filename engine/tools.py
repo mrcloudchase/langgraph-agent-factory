@@ -1,12 +1,9 @@
-"""The three tools every service agent has access to.
+"""Built-in tools that ship with the factory.
 
-web_search   — find things across the open web
-web_fetch    — read a specific URL in full
-run_python   — process, format, calculate, or call any API via code
+Import any of these and pass them to ToolRegistry.register():
 
-These primitives cover the vast majority of possible services without
-any domain-specific integrations. Delivery is a platform concern handled
-by the Runtime, not a tool concern handled by the agent.
+    from engine.tools import web_search, web_fetch, run_python
+    tools.register(web_search, web_fetch, run_python)
 """
 
 from __future__ import annotations
@@ -69,7 +66,3 @@ def run_python(code: str) -> str:
     finally:
         sys.stdout = sys.__stdout__
 
-
-TOOL_REGISTRY: dict[str, object] = {
-    t.name: t for t in [web_search, web_fetch, run_python]
-}

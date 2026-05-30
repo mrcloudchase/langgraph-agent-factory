@@ -1,9 +1,9 @@
-"""
-End-to-end platform demo.
+"""Agent Factory demo.
 
-A customer describes a service in plain language.
-The meta-agent designs it. The runtime delivers it.
-The marketplace stores it for everyone.
+Shows how to:
+  1. Set up a ToolRegistry with built-in and custom tools
+  2. Define agents with AgentSpec
+  3. Build and run them through AgentFactory
 
     pip install -r requirements.txt
     export ANTHROPIC_API_KEY=sk-ant-...
@@ -15,87 +15,82 @@ from __future__ import annotations
 import os
 import sys
 
-from engine import Marketplace, MetaAgent, Runtime
+from engine import AgentFactory, AgentSpec, ToolRegistry
+from engine.tools import run_python, web_fetch, web_search
 
-# ── The customer's request ───────────────────────────────────────────────────
-
-REQUEST = (
-    "Every week give me a digest of what Salesforce, HubSpot, and Notion "
-    "announced — blog posts, press releases, product launches. "
-    "Just the headlines and a one-line 'so what' for each item."
-)
-
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
 
 def section(label: str) -> None:
-    width = 64
-    pad = (width - len(label) - 2) // 2
+    pad = (60 - len(label) - 2) // 2
     print(f"\n{'─' * pad} {label} {'─' * pad}\n")
 
-
-# ── Demo ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         sys.exit("Set ANTHROPIC_API_KEY before running.  See .env.example.")
 
-    meta      = MetaAgent()
-    runtime   = Runtime()
-    market    = Marketplace()
+    # ── 1. Tool registry ──────────────────────────────────────────────────────
+    tools = ToolRegistry()
+    tools.register(web_search, web_fetch, run_python)
 
-    # 1 ── Customer describes the service ────────────────────────────────────
-    section("CUSTOMER REQUEST")
-    print(REQUEST)
+    @tools.tool
+    def word_count(text: str) -> str:
+        """Count the number of words in a block of text."""
+        n = len(text.split())
+        return f"{n} words"
 
-    # 2 ── Meta-agent checks if it needs clarification ───────────────────────
-    section("META-AGENT: CLARIFY")
-    answer = meta.clarify(REQUEST)
-    if answer == "READY":
-        print("Enough information — proceeding to design.")
-    else:
-        print(answer)
-        print("\n(Continuing with what we have for the demo.)")
+    section("REGISTERED TOOLS")
+    print("  " + ", ".join(tools.names))
 
-    # 3 ── Design the service ─────────────────────────────────────────────────
-    section("META-AGENT: DESIGN")
-    print("Generating service spec...\n")
-    spec = meta.design(REQUEST)
+    # ── 2. Agent definitions ──────────────────────────────────────────────────
+    factory = AgentFactory(tools)
 
-    print(f"  Name        {spec.name}")
-    print(f"  Description {spec.description}")
-    print(f"  Tools       {', '.join(spec.tools)}")
-    print(f"  Trigger     {spec.trigger}")
-    print(f"  Delivers to {spec.output_destination}")
-    print(f"  Price       ${spec.price_per_run:.2f} per run")
-    print(f"\n  System prompt (excerpt):")
-    print("  " + spec.system_prompt[:300].replace("\n", "\n  ") + "…")
+    factory.register(AgentSpec(
+        name="researcher",
+        type="react",
+        system_prompt=(
+            "You are a concise research assistant. "
+            "Search the web and summarize findings clearly in plain language. "
+            "Always cite your sources."
+        ),
+        tools=["web_search", "web_fetch"],
+    ))
 
-    # 4 ── Execute the service ────────────────────────────────────────────────
-    section("RUNTIME: EXECUTE")
-    print("Running service...\n")
+    factory.register(AgentSpec(
+        name="analyst",
+        type="react",
+        system_prompt=(
+            "You are a data analyst. "
+            "Use Python to process data, run calculations, and produce clear summaries."
+        ),
+        tools=["run_python", "word_count"],
+    ))
 
-    run = runtime.run(
-        spec,
-        customer_id="demo",
-        input_text="Run the weekly competitor digest for this week.",
-    )
+    section("REGISTERED AGENTS")
+    print("  researcher  — web_search, web_fetch")
+    print("  analyst     — run_python, word_count")
 
-    section("OUTPUT")
-    print(run.output)
-    print(f"\n  Cost: ${run.cost:.2f}")
-    print(f"  Success: {run.success}")
+    # ── 3. Run: researcher ────────────────────────────────────────────────────
+    section("RESEARCHER AGENT")
+    print("Question: What is LangGraph and what problems does it solve?\n")
 
-    # 5 ── Publish to marketplace ─────────────────────────────────────────────
-    section("MARKETPLACE")
-    market.publish(spec, verified=False)
+    researcher = factory.build("researcher")
+    result = researcher.invoke({
+        "messages": [{"role": "user", "content": "What is LangGraph and what problems does it solve?"}]
+    })
+    print(result["messages"][-1].content)
 
-    print(f"  Published:  '{spec.name}'  (id: {spec.id})")
-    print(f"  Verified:   {spec.verified}  — needs more runs before going public")
-    print(f"  Catalog:    {len(market.list())} service(s) total")
-    print()
-    print("  Once verified this service is available to every customer")
-    print("  on the platform with one-click deploy.")
+    # ── 4. Run: analyst ───────────────────────────────────────────────────────
+    section("ANALYST AGENT")
+    print("Question: Calculate compound interest on $10,000 at 7% for 10 years.\n")
+
+    analyst = factory.build("analyst")
+    result = analyst.invoke({
+        "messages": [{
+            "role": "user",
+            "content": "Calculate compound interest on $10,000 at 7% annually for 10 years. Show year-by-year breakdown."
+        }]
+    })
+    print(result["messages"][-1].content)
 
 
 if __name__ == "__main__":
